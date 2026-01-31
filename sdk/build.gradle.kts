@@ -1,7 +1,12 @@
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.KotlinMultiplatform
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.android.lint)
+    alias(libs.plugins.vanniktech.mavenPublish)
 }
 
 kotlin {
@@ -31,13 +36,19 @@ kotlin {
     // A step-by-step guide on how to include this library in an XCode
     // project can be found here:
     // https://developer.android.com/kotlin/multiplatform/migrate
+    val xcframeworkName = "kmpsdk"
+    val xcf = XCFramework(xcframeworkName)
+
     listOf(
         iosX64(),
         iosArm64(),
         iosSimulatorArm64()
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
-            baseName = "sdkKit"
+            baseName = xcframeworkName
+            // Specify CFBundleIdentifier to uniquely identify the framework
+            binaryOption("bundleId", "com.gilbertohdz.${xcframeworkName}")
+            xcf.add(this)
             isStatic = true
         }
     }
@@ -89,3 +100,28 @@ kotlin {
     }
 
 }
+
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/gilbertohdz/KMPSdk")
+            credentials {
+                username = providers.gradleProperty("githubPackageUsername").orNull
+                password = providers.gradleProperty("githubPackagePassword").orNull
+            }
+        }
+    }
+}
+
+mavenPublishing {
+    configure(
+        KotlinMultiplatform(
+            javadocJar = JavadocJar.None(),
+            sourcesJar = false
+        )
+    )
+}
+
+group = providers.gradleProperty("GROUP").get()
+version = providers.gradleProperty("VERSION_NAME").get()

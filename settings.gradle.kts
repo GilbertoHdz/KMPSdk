@@ -16,6 +16,15 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+
+        maven {
+            url = uri("https://maven.pkg.github.com/GilbertoHdz/KMPSdk")
+//            credentials {
+//                username = providers.gradleProperty("githubPackageUsername").orNull
+//                password = providers.gradleProperty("githubPackagePassword").orNull
+//            }
+        }
+
     }
 }
 
