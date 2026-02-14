@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
+import org.jetbrains.kotlin.gradle.dsl.KotlinJsCompile
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
@@ -97,8 +98,29 @@ kotlin {
                 // KMP dependencies declared in commonMain.
             }
         }
+
+        jsMain {
+            dependencies {
+
+            }
+        }
     }
 
+    js {
+        moduleName = "kmpsdk"
+        browser {
+            binaries.library()
+        }
+        nodejs {
+            binaries.library()
+        }
+    }
+}
+
+tasks.withType<KotlinJsCompile>().configureEach {
+    compilerOptions {
+        target = "es2015"
+    }
 }
 
 publishing {
