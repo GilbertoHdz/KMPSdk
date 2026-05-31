@@ -1,0 +1,92 @@
+name: CI - Build and Test
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches-ignore:
+      - develop
+      - main
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Kotlin Native
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.konan
+          key: ${{ runner.os }}-konan-${{ hashFiles('**/gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-konan-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build SDK
+        run: ./gradlew :sdk:build :sdk:jsNodeProductionLibraryDistribution
+
+      - name: Verify JS package exists
+        run: |
+          if [ -d "sdk/build/dist/js/productionLibrary" ]; then
+            echo "✅ productionLibrary exists"
+            ls -la sdk/build/dist/js/productionLibrary || true
+            echo "📦 Package contents:"
+            ls -la sdk/build/dist/js/productionLibrary/package.json || true
+          else
+            echo "❌ Missing sdk/build/dist/js/productionLibrary - jsNodeProductionLibraryDistribution may have failed"
+            exit 1
+          fi
+
+      - name: Run Tests
+        run: ./gradlew :sdk:allTests
+
+      - name: Run Lint
+        run: ./gradlew :sdk:lint || true
+
+      - name: Upload build reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            sdk/build/reports/
+            sdk/build/test-results/
+          retention-days: 7
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
