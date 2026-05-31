@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KMP SDK — Local Web Demo</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 16px; }
+        h1   { font-size: 1.4rem; }
+        .badge {
+            display: inline-block;
+            background: #e8f5e9; color: #2e7d32;
+            border-radius: 6px; padding: 4px 12px;
+            font-family: monospace; font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hello from KMP SDK!</h1>
+    <p>platform: <span class="badge" id="platform">loading…</span></p>
+
+    <script type="module">
+        // Ruta relativa al build del SDK:
+        // kmplocal/ → kmpsdk/ → web/ → examples/ → KMPSdk/ → sdk/build/...
+        import { platform } from "../../../../sdk/build/dist/js/productionLibrary/kmpsdk.mjs";
+
+        document.getElementById("platform").textContent = platform();
+    </script>
+</body>
+</html>

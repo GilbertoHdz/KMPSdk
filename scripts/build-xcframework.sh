@@ -27,9 +27,6 @@ echo -e "  Output: ${XCFRAMEWORK_PATH}"
 echo ""
 
 # Clean previous build
-echo -e "${YELLOW}🧹 Cleaning previous build...${NC}"
-rm -rf "sdk/build/XCFrameworks/${BUILD_TYPE}"
-
 # Build XCFramework
 echo -e "${YELLOW}🔨 Building XCFramework...${NC}"
 if [ "$BUILD_TYPE" = "release" ]; then
