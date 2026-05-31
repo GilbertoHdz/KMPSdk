@@ -114,6 +114,18 @@ kotlin {
         nodejs {
             binaries.library()
         }
+        compilations["main"].packageJson {
+            name = "@gilbertohdz/kmpsdk"
+            version = project.version.toString()
+            customField("description", "KMP SDK for JavaScript")
+            customField("repository", mapOf(
+                "type" to "git",
+                "url" to "https://github.com/GilbertoHdz/KMPSdk.git"
+            ))
+            customField("keywords", listOf("kmp", "kotlin", "multiplatform"))
+            customField("author", "Gilberto Hernandez")
+            customField("license", "MIT")
+        }
     }
 }
 
@@ -123,14 +135,25 @@ tasks.withType<KotlinJsCompile>().configureEach {
     }
 }
 
+
+tasks.register<Exec>("publishToNpm") {
+    dependsOn("jsNodeProductionLibraryDistribution")
+    workingDir = layout.buildDirectory.asFile.get().resolve("dist/js/productionLibrary")
+    commandLine("sh", "-c", """
+        npm config set @gilbertohdz:registry https://npm.pkg.github.com
+        npm config set //npm.pkg.github.com/:_authToken ${System.getenv("GITHUB_TOKEN") ?: ""}
+        npm publish
+    """.trimIndent())
+}
+
 publishing {
     repositories {
         maven {
             name = "GitHubPackages"
             url = uri("https://maven.pkg.github.com/gilbertohdz/KMPSdk")
             credentials {
-                username = providers.gradleProperty("githubPackageUsername").orNull
-                password = providers.gradleProperty("githubPackagePassword").orNull
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
             }
         }
     }
@@ -145,5 +168,139 @@ mavenPublishing {
     )
 }
 
+val baseVersion = providers.gradleProperty("VERSION_NAME").get()
+val isSnapshot = System.getenv("IS_SNAPSHOT")?.toBoolean() ?: true
+
+
 group = providers.gradleProperty("GROUP").get()
-version = providers.gradleProperty("VERSION_NAME").get()
+version = if (isSnapshot) "$baseVersion-SNAPSHOT" else baseVersion
+
+
+
+// ========== Build Tasks (Local) ==========
+
+// 1. Zip del XCFramework
+val packageXCFramework by tasks.registering(Zip::class) {
+    group = "build"
+    description = "Zip the XCFramework for distribution"
+
+    dependsOn("assembleKmpsdkReleaseXCFramework")
+
+    from("build/XCFrameworks/release/kmpsdk.xcframework")
+    archiveFileName.set("kmpsdk.xcframework.zip")
+    destinationDirectory.set(file("build/XCFrameworks/release"))
+
+    doLast {
+        println("✅ XCFramework ZIP created at: ${destinationDirectory.asFile.get()}/kmpsdk.xcframework.zip")
+    }
+}
+
+// 2. Build npm package (local, no publish)
+val buildNpm by tasks.registering {
+    group = "build"
+    description = "Build the JS library for Node.js"
+
+    dependsOn("jsNodeProductionLibraryDistribution")
+
+    doLast {
+        val npmDir = file("build/dist/js/productionLibrary")
+        if (npmDir.exists()) {
+            println("✅ npm package built at: ${npmDir.absolutePath}")
+            println("   Files:")
+            npmDir.listFiles()?.forEach { file ->
+                if (file.isFile) println("   - ${file.name}")
+            }
+        } else {
+            println("❌ npm package directory not found")
+        }
+    }
+}
+
+// 3. Build everything locally (no publish)
+val buildAll by tasks.registering {
+    group = "build"
+    description = "Build all artifacts locally (Maven, npm, XCFramework) without publishing"
+
+    dependsOn(
+        "build",
+        buildNpm,
+        packageXCFramework
+    )
+
+    tasks["buildNpm"].mustRunAfter("build")
+    packageXCFramework.get().mustRunAfter("build")
+
+    doLast {
+        println("")
+        println("========================================")
+        println("✅ Build Complete!")
+        println("========================================")
+        println("Version: $version (isSnapshot=$isSnapshot)")
+        println("")
+        println("📦 Artifacts Generated:")
+        println("   Maven: build/outputs/")
+        println("   npm:   build/dist/js/productionLibrary/")
+        println("   iOS:   build/XCFrameworks/release/kmpsdk.xcframework.zip")
+        println("")
+    }
+}
+
+// ========== Publish Tasks (GitHub) ==========
+
+// 4. Publish npm to GitHub Packages
+val publishNpmToGitHub by tasks.registering(Exec::class) {
+    group = "publishing"
+    description = "Publish the npm package to GitHub Packages (requires GITHUB_TOKEN)"
+
+    dependsOn("jsNodeProductionLibraryDistribution")
+
+    workingDir("build/dist/js/productionLibrary")
+    commandLine(
+        "sh", "-c",
+        """
+        npm config set @gilbertohdz:registry https://npm.pkg.github.com &&
+        npm config set //npm.pkg.github.com/:_authToken ${'$'}{GITHUB_TOKEN:-""} &&
+        npm publish
+        """.trimIndent()
+    )
+
+    onlyIf {
+        System.getenv("GITHUB_TOKEN") != null
+    }
+}
+
+// 5. Publish Maven to GitHub Packages (handled by vanniktech plugin)
+// Just runs the standard "publish" task configured in publishing block
+
+// 6. Master publish task (GitHub Actions)
+val publishAllToGitHub by tasks.registering {
+    group = "publishing"
+    description = "Build and publish all artifacts to GitHub Packages (for CI/CD)"
+
+    dependsOn(
+        "build",
+        buildNpm,
+        packageXCFramework,
+        "publish",              // Maven (vanniktech plugin)
+        publishNpmToGitHub
+    )
+
+    tasks["buildNpm"].mustRunAfter("build")
+    packageXCFramework.get().mustRunAfter("build")
+    tasks["publish"].mustRunAfter("build")
+    publishNpmToGitHub.get().mustRunAfter("buildNpm")
+
+    doLast {
+        println("")
+        println("========================================")
+        println("✅ Publish Complete!")
+        println("========================================")
+        println("Version: $version (isSnapshot=$isSnapshot)")
+        println("")
+        println("📦 Published Artifacts:")
+        println("   Maven:   GitHub Packages")
+        println("   npm:     GitHub Packages")
+        println("   iOS ZIP: (for GitHub Release)")
+        println("")
+    }
+}

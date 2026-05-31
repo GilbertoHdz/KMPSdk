@@ -16,6 +16,10 @@ local.properties
 
 .kotlin
 **/build/
+# Exception: Keep XCFramework for Swift Package Manager
+!sdk/build/XCFrameworks/
+!sdk/build/XCFrameworks/release/
+!sdk/build/XCFrameworks/release/kmpsdk.xcframework/
 xcuserdata
 !src/**/build/
 .idea
