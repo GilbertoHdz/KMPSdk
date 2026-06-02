@@ -1,0 +1,42 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317          # Android emulator / native clients
+
+      http:
+        endpoint: 0.0.0.0:4318          # Browser JS
+        cors:
+          allowed_origins:
+            - "http://localhost:8080"    # web demo (serve.sh)
+            - "http://127.0.0.1:8080"
+          allowed_headers:
+            - "Content-Type"
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+
+  resource:
+    attributes:
+      - action: insert
+        key: deployment.environment
+        value: local
+
+exporters:
+  # Forward to Jaeger via OTLP HTTP — simpler than gRPC, no TLS negotiation needed
+  # Jaeger all-in-one exposes OTLP HTTP on :4318 when COLLECTOR_OTLP_ENABLED=true
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
+
+  # Print one line per batch to collector stdout (visible in: docker logs <collector>)
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers:  [otlp]
+      processors: [batch, resource]
+      exporters:  [otlphttp/jaeger, debug]

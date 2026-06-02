@@ -42,10 +42,12 @@ android {
 }
 
 dependencies {
-    implementation("com.gilbertohdz:kmpsdk:0.1.0-SNAPSHOT")
+    implementation(project(":sdk"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

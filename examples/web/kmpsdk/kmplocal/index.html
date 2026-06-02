@@ -5,26 +5,110 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KMP SDK — Local Web Demo</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 480px; margin: 60px auto; padding: 0 16px; }
-        h1   { font-size: 1.4rem; }
-        .badge {
-            display: inline-block;
-            background: #e8f5e9; color: #2e7d32;
-            border-radius: 6px; padding: 4px 12px;
-            font-family: monospace; font-size: 0.9rem;
-        }
+        body     { font-family: system-ui, sans-serif; max-width: 520px; margin: 48px auto; padding: 0 16px; }
+        h1       { font-size: 1.4rem; margin-bottom: 4px; }
+        .sub     { color: #666; font-size: .85rem; margin-bottom: 24px; }
+        .badge   { display: inline-block; border-radius: 6px; padding: 3px 10px; font-family: monospace; font-size: .85rem; }
+        .badge-local  { background: #e8f5e9; color: #2e7d32; }
+        .badge-jaeger { background: #e3f2fd; color: #1565c0; }
+        button   { display: block; width: 100%; padding: 10px; margin: 8px 0; border: none; border-radius: 8px; font-size: .95rem; cursor: pointer; background: #1976d2; color: #fff; }
+        button.err { background: #d32f2f; }
+        button:disabled { opacity: .5; cursor: default; }
+        .card    { background: #f5f5f5; border-radius: 8px; padding: 12px 14px; margin: 6px 0 14px; font-size: .82rem; font-family: monospace; white-space: pre-wrap; min-height: 32px; }
+        .card.error { background: #ffebee; color: #c62828; }
+        .hint    { color: #999; font-size: .75rem; margin-top: 20px; line-height: 1.6; }
+        .hint a  { color: #1976d2; }
+        .mode-bar { background: #f5f5f5; border-radius: 8px; padding: 8px 12px; margin-bottom: 20px; font-size: .8rem; display: flex; align-items: center; gap: 8px; }
     </style>
 </head>
 <body>
     <h1>Hello from KMP SDK!</h1>
-    <p>platform: <span class="badge" id="platform">loading…</span></p>
+    <p class="sub">platform: <span class="badge badge-local" id="platform">…</span></p>
 
+    <div class="mode-bar" id="mode-bar">
+        <span id="mode-icon">📋</span>
+        <span id="mode-label">Traces → DevTools console</span>
+    </div>
+
+    <button id="btn-users">GET /users</button>
+    <div class="card" id="card-users">—</div>
+
+    <button id="btn-post">POST /posts</button>
+    <div class="card" id="card-post">—</div>
+
+    <button id="btn-error" class="err">GET /posts/99999 (Error 404)</button>
+    <div class="card" id="card-error">—</div>
+
+    <p class="hint" id="hint-text"></p>
+
+    <script>
+        // Set OTLP endpoint when ?jaeger=1 is in the URL (used by serve-jaeger.sh).
+        // In local mode (serve.sh) this block is skipped — traces go to DevTools console only.
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("jaeger")) {
+            window.__OTEL_ENDPOINT__ = "http://localhost:4318/v1/traces";
+
+            document.getElementById("mode-icon").textContent  = "🔭";
+            document.getElementById("mode-label").textContent = "Traces → Jaeger (localhost:16686)";
+            document.getElementById("platform").className     = "badge badge-jaeger";
+
+            const hint = document.getElementById("hint-text");
+            hint.innerHTML = 'Open <a href="http://localhost:16686" target="_blank">localhost:16686</a>, '
+                + 'select service <code>kmpsdk-web</code> and click <strong>Find Traces</strong>.';
+        } else {
+            document.getElementById("hint-text").innerHTML =
+                'Spans → DevTools console (tag: <code>OTel:JS</code>). '
+                + 'Run <code>serve-jaeger.sh</code> to send traces to Jaeger instead.';
+        }
+    </script>
     <script type="module">
-        // Ruta relativa al build del SDK:
-        // kmplocal/ → kmpsdk/ → web/ → examples/ → KMPSdk/ → sdk/build/...
-        import { platform } from "../../../../sdk/build/dist/js/productionLibrary/kmpsdk.mjs";
+        import { platform, sdkGetUsers, sdkCreatePost, sdkGetPostError }
+            from "../../../../sdk/build/dist/js/productionLibrary/kmpsdk.mjs";
 
         document.getElementById("platform").textContent = platform();
+
+        function setLoading(cardId, btnId) {
+            document.getElementById(cardId).textContent = "Loading…";
+            document.getElementById(btnId).disabled = true;
+        }
+        function setResult(cardId, btnId, text, isError = false) {
+            const card = document.getElementById(cardId);
+            card.textContent = text;
+            card.className = isError ? "card error" : "card";
+            document.getElementById(btnId).disabled = false;
+        }
+
+        document.getElementById("btn-users").addEventListener("click", async () => {
+            setLoading("card-users", "btn-users");
+            try {
+                const users = await sdkGetUsers();
+                const lines = Array.from(users).map(u => `[${u.id}] ${u.name} — ${u.email}`);
+                setResult("card-users", "btn-users", lines.join("\n"));
+            } catch (e) {
+                setResult("card-users", "btn-users", "Error: " + (e?.message ?? String(e)), true);
+            }
+        });
+
+        document.getElementById("btn-post").addEventListener("click", async () => {
+            setLoading("card-post", "btn-post");
+            try {
+                const post = await sdkCreatePost();
+                setResult("card-post", "btn-post",
+                    `id: ${post.id}\ntitle: ${post.title}\nuserId: ${post.userId}`);
+            } catch (e) {
+                setResult("card-post", "btn-post", "Error: " + (e?.message ?? String(e)), true);
+            }
+        });
+
+        document.getElementById("btn-error").addEventListener("click", async () => {
+            setLoading("card-error", "btn-error");
+            try {
+                const post = await sdkGetPostError();
+                setResult("card-error", "btn-error", `id: ${post.id}`);
+            } catch (e) {
+                setResult("card-error", "btn-error", "Error: " + (e?.message ?? String(e)), true);
+            }
+        });
     </script>
 </body>
 </html>

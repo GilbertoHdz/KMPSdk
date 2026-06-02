@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.android.lint)
     alias(libs.plugins.vanniktech.mavenPublish)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 kotlin {
@@ -61,9 +63,16 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-hierarchy.html
     sourceSets {
         commonMain {
+            // Lazy srcDir: evaluated at execution time so Gradle doesn't check existence at config time
+            kotlin.srcDir(provider { file("build/generated/ksp/metadata/commonMain/kotlin") })
             dependencies {
                 implementation(libs.kotlin.stdlib)
-                // Add KMP dependencies here
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.content.negotiation)
+                implementation(libs.ktor.serialization.kotlinx.json)
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.ktorfit.lib)
             }
         }
 
@@ -75,9 +84,12 @@ kotlin {
 
         androidMain {
             dependencies {
-                // Add Android-specific dependencies here. Note that this source set depends on
-                // commonMain by default and will correctly pull the Android artifacts of any KMP
-                // dependencies declared in commonMain.
+                implementation(libs.ktor.client.android)
+                implementation(libs.opentelemetry.api)
+                implementation(libs.opentelemetry.sdk)
+                implementation(libs.opentelemetry.exporter.otlp)
+                implementation(libs.opentelemetry.exporter.logging)
+                implementation(libs.opentelemetry.semconv)
             }
         }
 
@@ -91,17 +103,13 @@ kotlin {
 
         iosMain {
             dependencies {
-                // Add iOS-specific dependencies here. This a source set created by Kotlin Gradle
-                // Plugin (KGP) that each specific iOS target (e.g., iosX64) depends on as
-                // part of KMP’s default source set hierarchy. Note that this source set depends
-                // on common by default and will correctly pull the iOS artifacts of any
-                // KMP dependencies declared in commonMain.
+                implementation(libs.ktor.client.darwin)
             }
         }
 
         jsMain {
             dependencies {
-
+                implementation(libs.ktor.client.js)
             }
         }
     }
@@ -127,6 +135,28 @@ kotlin {
             customField("license", "MIT")
         }
     }
+}
+
+// KSP processors of Ktorfit for each target
+dependencies {
+    add("kspCommonMainMetadata", libs.ktorfit.ksp)
+    add("kspAndroid", libs.ktorfit.ksp)
+    add("kspIosX64", libs.ktorfit.ksp)
+    add("kspIosArm64", libs.ktorfit.ksp)
+    add("kspIosSimulatorArm64", libs.ktorfit.ksp)
+    add("kspJs", libs.ktorfit.ksp)
+}
+
+// Ensure KSP-generated commonMain code is available before compiling any target
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().configureEach {
+    if (name != "kspCommonMainKotlinMetadata") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
+}
+
+// Fix implicit dependency between kspAndroidMain and the Android ART profile task
+afterEvaluate {
+    tasks.findByName("prepareAndroidMainArtProfile")?.dependsOn("kspAndroidMain")
 }
 
 tasks.withType<KotlinJsCompile>().configureEach {
