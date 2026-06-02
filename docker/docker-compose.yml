@@ -1,0 +1,31 @@
+services:
+
+  # ── OpenTelemetry Collector ──────────────────────────────────────────────────
+  # Receives OTLP from Android (gRPC 4317) and browser (HTTP 4318, with CORS).
+  # Exports to Jaeger via OTLP gRPC.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.100.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otel/config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC  — Android emulator / native clients
+      - "4318:4318"   # OTLP HTTP  — browser JS (CORS enabled)
+      - "8888:8888"   # Collector self-metrics (Prometheus)
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  # ── Jaeger ───────────────────────────────────────────────────────────────────
+  # All-in-one: UI + in-memory storage + OTLP receiver (internal, via collector).
+  # UI → http://localhost:16686
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+      - MEMORY_MAX_TRACES=10000
+    ports:
+      - "16686:16686"  # Jaeger UI
+      # 4317 is used internally by the collector → jaeger (not exposed to host)
+    restart: unless-stopped

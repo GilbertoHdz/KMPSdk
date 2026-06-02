@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Allow cleartext HTTP to the local OTel Collector running on the dev machine.
+        The Android emulator reaches the host at 10.0.2.2 (loopback alias).
+        This config only affects debug / dev builds — production traffic remains TLS-only.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>
